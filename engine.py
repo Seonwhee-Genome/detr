@@ -12,7 +12,9 @@ import torch
 import util.misc as utils
 from datasets.coco_eval import CocoEvaluator
 from datasets.panoptic_eval import PanopticEvaluator
+from torch.utils.tensorboard import SummaryWriter
 
+writer = SummaryWriter('/home/ubuntu/Tensorboard_log/DETR')
 
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
@@ -56,8 +58,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         optimizer.step()
 
         metric_logger.update(loss=loss_value, **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled)
+        writer.add_scalar("DETR/train_loss", loss_value, epoch)
         metric_logger.update(class_error=loss_dict_reduced['class_error'])
+        writer.add_scalar("DETR/class_error_train", loss_dict_reduced['class_error'], epoch)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+        writer.add_scalar("DETR/learning_rate", optimizer.param_groups[0]["lr"], epoch)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
@@ -65,7 +70,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, output_dir):
+def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, output_dir, epoch):
     model.eval()
     criterion.eval()
 
@@ -102,7 +107,9 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
         metric_logger.update(loss=sum(loss_dict_reduced_scaled.values()),
                              **loss_dict_reduced_scaled,
                              **loss_dict_reduced_unscaled)
+        writer.add_scalar("DETR/val_loss", sum(loss_dict_reduced_scaled.values()), epoch)
         metric_logger.update(class_error=loss_dict_reduced['class_error'])
+        writer.add_scalar("DETR/class_error_val", loss_dict_reduced['class_error'], epoch)
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors['bbox'](outputs, orig_target_sizes)
